@@ -1,11 +1,7 @@
 streamlit
 transformers==4.30.2
-tokenizers==0.13.3
 torch
 scikit-learn
 numpy
 pandas
-git+https://github.com/huggingface/accelerate
-datasets
-tokenizers
-git-lfs
+
