@@ -76,21 +76,31 @@ if st.button("Predict Toxicity"):
 # Bulk CSV Prediction
 st.markdown("---")
 st.subheader("📁 Upload CSV for Bulk Predictions")
-uploaded_file = st.file_uploader("Upload a CSV with a 'comment_text' column")
+uploaded_file = st.file_uploader("Upload a CSV with a 'comment_text' column", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     if 'comment_text' not in df.columns:
         st.error("CSV must contain a 'comment_text' column.")
     else:
-        with st.spinner("Predicting..."):
+        with st.spinner("🔍 Predicting toxicity for each comment..."):
             preds = [predict(comment) for comment in df["comment_text"]]
             pred_df = pd.DataFrame(preds)
             result_df = pd.concat([df, pred_df], axis=1)
-        st.success("Done!")
+
+        st.success("✅ Predictions complete!")
+        st.markdown("### 🔄 Preview of results:")
         st.dataframe(result_df.head())
+
+        # Download button
         csv = result_df.to_csv(index=False).encode('utf-8')
-        st.download_button("⬇️ Download Results CSV", csv, "predictions.csv", "text/csv")
+        st.download_button(
+            label="⬇️ Download Full Prediction CSV",
+            data=csv,
+            file_name="toxic_predictions.csv",
+            mime="text/csv"
+        )
+
 
 # ----------------------------
 # Model Info
