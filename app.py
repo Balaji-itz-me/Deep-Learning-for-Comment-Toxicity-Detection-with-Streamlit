@@ -7,7 +7,7 @@ import json
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from transformers import AutoTokenizer, BertModel
+from transformers import BertTokenizer, BertModel
 import io
 import base64
 from datetime import datetime
@@ -80,18 +80,46 @@ def load_model_and_tokenizer():
             label_list = json.load(f)
         
         # Load tokenizer
-        tokenizer = AutoTokenizer.from_pretrained('./bert_tokenizer')
+        tokenizer = BertTokenizer.from_pretrained('./bert_tokenizer')
         
         # Load model
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = BertMultiLabelClassifier(n_classes=len(label_list))
-        model.load_state_dict(torch.load('bert_multilabel_best.pth', map_location=device))
+        
+        # Load state dict with compatibility handling
+        state_dict = torch.load('bert_multilabel_best.pth', map_location=device)
+        
+        # Handle missing position_ids key for compatibility
+        model_state = model.state_dict()
+        filtered_state_dict = {}
+        
+        for key, value in state_dict.items():
+            if key in model_state:
+                # Check if shapes match
+                if model_state[key].shape == value.shape:
+                    filtered_state_dict[key] = value
+                else:
+                    st.warning(f"Shape mismatch for {key}: expected {model_state[key].shape}, got {value.shape}")
+            else:
+                st.warning(f"Unexpected key in state_dict: {key}")
+        
+        # Add missing keys with default values
+        for key in model_state:
+            if key not in filtered_state_dict:
+                filtered_state_dict[key] = model_state[key]
+                st.info(f"Using default value for missing key: {key}")
+        
+        model.load_state_dict(filtered_state_dict, strict=False)
         model.eval()
         model.to(device)
         
         return model, tokenizer, label_list, device
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
+        st.error("Please check if all required files are present:")
+        st.error("- bert_multilabel_best.pth")
+        st.error("- label_list.json") 
+        st.error("- bert_tokenizer/ directory with tokenizer files")
         return None, None, None, None
 
 # Prediction function
