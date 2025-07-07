@@ -7,7 +7,7 @@ import json
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from transformers import BertTokenizer, BertModel
+from transformers import AutoTokenizer, BertModel
 import io
 import base64
 from datetime import datetime
