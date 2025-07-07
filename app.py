@@ -80,7 +80,7 @@ def load_model_and_tokenizer():
             label_list = json.load(f)
         
         # Load tokenizer
-        tokenizer = BertTokenizer.from_pretrained('./bert_tokenizer')
+        tokenizer = AutoTokenizer.from_pretrained('./bert_tokenizer')
         
         # Load model
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
