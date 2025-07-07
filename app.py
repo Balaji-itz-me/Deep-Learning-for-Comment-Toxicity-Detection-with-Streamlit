@@ -157,112 +157,132 @@ def predict_toxicity(text, model, tokenizer, label_list, device, threshold=0.5):
         st.error(f"Prediction error: {str(e)}")
         return None, None, False
 
-# Optimized bulk prediction function
-def predict_bulk_optimized(df, text_column, model, tokenizer, label_list, device, threshold=0.5, batch_size=32):
-    """Predict toxicity for multiple texts using batching"""
+# Ultra-optimized bulk prediction with aggressive memory management
+def predict_bulk_ultra_optimized(df, text_column, model, tokenizer, label_list, device, threshold=0.5, batch_size=8):
+    """Ultra-optimized prediction with aggressive memory management"""
     results = []
     total_rows = len(df)
     
     # Create progress containers
     progress_bar = st.progress(0)
     status_text = st.empty()
+    time_text = st.empty()
+    
+    start_time = datetime.now()
     
     try:
-        # Process in batches
+        # Process in very small batches to avoid timeout
         for batch_start in range(0, total_rows, batch_size):
             batch_end = min(batch_start + batch_size, total_rows)
-            batch_df = df.iloc[batch_start:batch_end]
             
-            # Prepare batch texts
-            batch_texts = [str(row[text_column]) for _, row in batch_df.iterrows()]
+            # Get batch texts
+            batch_texts = []
+            batch_indices = []
             
-            # Tokenize entire batch
-            encoding = tokenizer(
-                batch_texts,
-                truncation=True,
-                padding=True,
-                max_length=128,
-                return_tensors='pt'
-            )
+            for idx in range(batch_start, batch_end):
+                try:
+                    text = str(df.iloc[idx][text_column])
+                    # Truncate very long texts to avoid memory issues
+                    if len(text) > 500:
+                        text = text[:500] + "..."
+                    batch_texts.append(text)
+                    batch_indices.append(idx)
+                except:
+                    continue
             
-            input_ids = encoding['input_ids'].to(device)
-            attention_mask = encoding['attention_mask'].to(device)
-            
-            # Batch prediction
-            with torch.no_grad():
-                outputs = model(input_ids, attention_mask)
-                probabilities = torch.sigmoid(outputs).cpu().numpy()
-            
-            # Process batch results
-            for i, (idx, row) in enumerate(batch_df.iterrows()):
-                text = batch_texts[i]
-                probs = probabilities[i]
+            if not batch_texts:
+                continue
                 
-                result = {'text': text, 'row_index': idx}
+            try:
+                # Tokenize with strict limits
+                encoding = tokenizer(
+                    batch_texts,
+                    truncation=True,
+                    padding=True,
+                    max_length=64,  # Reduced from 128
+                    return_tensors='pt'
+                )
                 
-                # Add probabilities and predictions
-                for j, label in enumerate(label_list):
-                    prob = float(probs[j])
-                    result[label] = prob
-                    result[f"{label}_predicted"] = prob > threshold
+                input_ids = encoding['input_ids'].to(device)
+                attention_mask = encoding['attention_mask'].to(device)
                 
-                results.append(result)
+                # Batch prediction
+                with torch.no_grad():
+                    outputs = model(input_ids, attention_mask)
+                    probabilities = torch.sigmoid(outputs).cpu().numpy()
+                
+                # Clear GPU memory immediately
+                del input_ids, attention_mask, outputs
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                
+                # Process results
+                for i, idx in enumerate(batch_indices):
+                    text = batch_texts[i]
+                    probs = probabilities[i]
+                    
+                    result = {'text': text, 'row_index': idx}
+                    
+                    # Add probabilities and predictions
+                    for j, label in enumerate(label_list):
+                        prob = float(probs[j])
+                        result[label] = prob
+                        result[f"{label}_predicted"] = prob > threshold
+                    
+                    results.append(result)
+                
+                # Clear memory
+                del probabilities, encoding
+                
+            except Exception as e:
+                st.warning(f"Skipped batch {batch_start}-{batch_end}: {str(e)}")
+                continue
             
             # Update progress
             progress = (batch_end / total_rows)
             progress_bar.progress(progress)
-            status_text.text(f"Processed {batch_end}/{total_rows} rows ({progress:.1%})")
             
-            # Clear GPU cache periodically
-            if batch_start % (batch_size * 10) == 0:
+            # Time estimation
+            elapsed = (datetime.now() - start_time).total_seconds()
+            if progress > 0:
+                estimated_total = elapsed / progress
+                remaining = estimated_total - elapsed
+                status_text.text(f"Processed {batch_end}/{total_rows} rows ({progress:.1%})")
+                time_text.text(f"⏱️ Elapsed: {elapsed:.1f}s | Estimated remaining: {remaining:.1f}s")
+            
+            # Force garbage collection every 50 batches
+            if batch_start % (batch_size * 50) == 0:
+                import gc
+                gc.collect()
                 torch.cuda.empty_cache() if torch.cuda.is_available() else None
     
     except Exception as e:
-        st.error(f"Error during batch processing: {str(e)}")
-        return pd.DataFrame(results) if results else pd.DataFrame()
-    
+        st.error(f"Error during processing: {str(e)}")
+        
     status_text.text("Processing complete!")
+    time_text.text(f"Total time: {(datetime.now() - start_time).total_seconds():.1f}s")
+    
     return pd.DataFrame(results)
 
-# Memory-efficient chunked processing
-def process_large_csv(df, text_column, model, tokenizer, label_list, device, threshold=0.5, chunk_size=5000):
-    """Process very large CSV files in chunks"""
-    total_rows = len(df)
-    all_results = []
+# Emergency processing for very large files
+def emergency_sample_processing(df, text_column, model, tokenizer, label_list, device, threshold=0.5, sample_size=5000):
+    """Emergency processing with intelligent sampling"""
     
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    st.warning(f"🚨 Emergency mode: Processing {sample_size} samples from {len(df)} rows")
     
-    for chunk_start in range(0, total_rows, chunk_size):
-        chunk_end = min(chunk_start + chunk_size, total_rows)
-        chunk_df = df.iloc[chunk_start:chunk_end]
+    # Intelligent sampling strategy
+    if len(df) > sample_size:
+        # Take random sample + first/last rows for variety
+        random_sample = df.sample(n=sample_size-200, random_state=42)
+        first_rows = df.head(100)
+        last_rows = df.tail(100)
         
-        status_text.text(f"Processing chunk {chunk_start//chunk_size + 1}/{(total_rows-1)//chunk_size + 1}")
-        
-        # Process chunk with batching
-        chunk_results = predict_bulk_optimized(
-            chunk_df, text_column, model, tokenizer, label_list, device, threshold, batch_size=16
-        )
-        
-        if not chunk_results.empty:
-            all_results.append(chunk_results)
-        
-        # Update overall progress
-        progress = chunk_end / total_rows
-        progress_bar.progress(progress)
-        
-        # Clear memory
-        del chunk_df, chunk_results
-        torch.cuda.empty_cache() if torch.cuda.is_available() else None
-    
-    status_text.text("Combining results...")
-    
-    if all_results:
-        final_df = pd.concat(all_results, ignore_index=True)
-        status_text.text("Processing complete!")
-        return final_df
+        df_sample = pd.concat([first_rows, random_sample, last_rows]).drop_duplicates()
     else:
-        return pd.DataFrame()
+        df_sample = df
+    
+    st.info(f"📊 Processing {len(df_sample)} rows")
+    
+    return predict_bulk_ultra_optimized(df_sample, text_column, model, tokenizer, label_list, device, threshold, batch_size=4)
 
 # Visualization functions
 def create_probability_chart(results, label_list):
@@ -459,63 +479,90 @@ def main():
                     df.columns.tolist()
                 )
                 
-                # Processing options
-                col1, col2, col3 = st.columns(3)
+                # Processing strategy based on file size
+                col1, col2 = st.columns(2)
                 
                 with col1:
-                    if len(df) > 10000:
-                        st.warning(f"⚠️ Large dataset detected ({len(df):,} rows)")
-                        chunk_size = st.selectbox(
-                            "Chunk size for processing:",
-                            [1000, 2000, 5000, 10000],
-                            index=2,
-                            help="Smaller chunks use less memory but take longer"
+                    if len(df) > 20000:
+                        st.error("🚨 Large file detected! Choose processing strategy:")
+                        processing_strategy = st.selectbox(
+                            "Processing Strategy:",
+                            [
+                                "Smart Sample (Recommended)",
+                                "Ultra-Fast Sample (5K rows)",
+                                "Conservative Full Processing",
+                                "Emergency Mode (1K rows)"
+                            ],
+                            help="Smart sampling is recommended for large files"
                         )
                     else:
-                        chunk_size = len(df)
+                        processing_strategy = "Standard Processing"
+                        st.success("✅ File size is manageable for full processing")
                 
                 with col2:
-                    batch_size = st.selectbox(
-                        "Batch size:",
-                        [8, 16, 32, 64],
-                        index=1,
-                        help="Larger batches are faster but use more memory"
-                    )
-                
-                with col3:
-                    # Sample processing option for very large files
-                    if len(df) > 50000:
-                        st.warning("🚀 Large file detected!")
-                        sample_size = st.number_input(
-                            "Sample size (0 for all):",
-                            min_value=0,
-                            max_value=len(df),
-                            value=10000,
-                            help="Process only a sample for faster results"
-                        )
-                        if sample_size > 0:
-                            df = df.sample(n=sample_size, random_state=42)
-                            st.info(f"Using random sample of {sample_size:,} rows")
+                    if processing_strategy == "Smart Sample (Recommended)":
+                        sample_size = st.slider("Sample size:", 1000, 20000, 10000, step=1000)
+                        st.info(f"Will process {sample_size} intelligently selected rows")
+                    elif processing_strategy == "Ultra-Fast Sample (5K rows)":
+                        sample_size = 5000
+                        st.info("Fast processing with 5K random sample")
+                    elif processing_strategy == "Emergency Mode (1K rows)":
+                        sample_size = 1000
+                        st.info("Emergency processing with 1K sample")
                     else:
-                        sample_size = 0
+                        sample_size = len(df)
+                        if len(df) > 50000:
+                            st.warning("⚠️ This may take 20-30 minutes and could timeout")
                 
-                # Time estimation
-                estimated_time = max(1, len(df) / 1000)  # Rough estimate
-                st.info(f"⏱️ Estimated processing time: {estimated_time:.1f} minutes")
+                # Time and resource warnings
+                if len(df) > 50000 and processing_strategy == "Conservative Full Processing":
+                    st.error("❌ NOT RECOMMENDED: This will likely timeout on Streamlit Cloud")
+                    st.write("Streamlit Cloud has 30-minute timeout limits")
+                elif len(df) > 20000 and processing_strategy == "Conservative Full Processing":
+                    st.warning("⚠️ May timeout. Consider using Smart Sample instead")
                 
-                if st.button("🚀 Analyze All Texts", type="primary"):
+                # Batch size selection
+                batch_size = st.selectbox(
+                    "Batch size (smaller = more stable):",
+                    [4, 8, 16],
+                    index=1,
+                    help="Smaller batches are more stable but slower"
+                )
+                
+                if st.button("🚀 Analyze Texts", type="primary"):
                     start_time = datetime.now()
                     
-                    with st.spinner("Processing bulk predictions..."):
-                        if len(df) > 10000:
-                            # Use chunked processing for large files
-                            results_df = process_large_csv(
+                    # Choose processing method based on strategy
+                    if processing_strategy == "Smart Sample (Recommended)":
+                        st.info(f"🧠 Using Smart Sample: {sample_size} rows")
+                        with st.spinner("Processing smart sample..."):
+                            results_df = emergency_sample_processing(
                                 df, text_column, model, tokenizer, label_list, 
-                                device, threshold, chunk_size=chunk_size
+                                device, threshold, sample_size
                             )
-                        else:
-                            # Use regular batch processing
-                            results_df = predict_bulk_optimized(
+                    
+                    elif processing_strategy == "Ultra-Fast Sample (5K rows)":
+                        st.info("⚡ Using Ultra-Fast Sample: 5K rows")
+                        df_sample = df.sample(n=5000, random_state=42)
+                        with st.spinner("Processing ultra-fast sample..."):
+                            results_df = predict_bulk_ultra_optimized(
+                                df_sample, text_column, model, tokenizer, label_list, 
+                                device, threshold, batch_size=4
+                            )
+                    
+                    elif processing_strategy == "Emergency Mode (1K rows)":
+                        st.info("🆘 Using Emergency Mode: 1K rows")
+                        df_sample = df.sample(n=1000, random_state=42)
+                        with st.spinner("Processing emergency sample..."):
+                            results_df = predict_bulk_ultra_optimized(
+                                df_sample, text_column, model, tokenizer, label_list, 
+                                device, threshold, batch_size=4
+                            )
+                    
+                    else:  # Conservative Full Processing
+                        st.warning("🐌 Using Conservative Full Processing - This may timeout!")
+                        with st.spinner("Processing all texts (this may take 20-30 minutes)..."):
+                            results_df = predict_bulk_ultra_optimized(
                                 df, text_column, model, tokenizer, label_list, 
                                 device, threshold, batch_size=batch_size
                             )
@@ -525,6 +572,10 @@ def main():
                     
                     if not results_df.empty:
                         st.success(f"✅ Analysis complete! Processed {len(results_df):,} texts in {processing_time:.1f} seconds")
+                        
+                        # Show sampling info
+                        if len(results_df) < len(df):
+                            st.info(f"📊 Results based on {len(results_df):,} rows from {len(df):,} total rows ({(len(results_df)/len(df)*100):.1f}% sample)")
                         
                         # Performance metrics
                         texts_per_second = len(results_df) / processing_time
