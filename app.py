@@ -157,27 +157,112 @@ def predict_toxicity(text, model, tokenizer, label_list, device, threshold=0.5):
         st.error(f"Prediction error: {str(e)}")
         return None, None, False
 
-# Bulk prediction function
-def predict_bulk(df, text_column, model, tokenizer, label_list, device, threshold=0.5):
-    """Predict toxicity for multiple texts"""
+# Optimized bulk prediction function
+def predict_bulk_optimized(df, text_column, model, tokenizer, label_list, device, threshold=0.5, batch_size=32):
+    """Predict toxicity for multiple texts using batching"""
     results = []
-    
-    progress_bar = st.progress(0)
     total_rows = len(df)
     
-    for idx, row in df.iterrows():
-        text = str(row[text_column])
-        probs, preds, success = predict_toxicity(text, model, tokenizer, label_list, device, threshold)
-        
-        if success:
-            result = {'text': text, 'row_index': idx}
-            result.update(probs)
-            result.update({f"{label}_predicted": preds[label] for label in label_list})
-            results.append(result)
-        
-        progress_bar.progress((idx + 1) / total_rows)
+    # Create progress containers
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
+    try:
+        # Process in batches
+        for batch_start in range(0, total_rows, batch_size):
+            batch_end = min(batch_start + batch_size, total_rows)
+            batch_df = df.iloc[batch_start:batch_end]
+            
+            # Prepare batch texts
+            batch_texts = [str(row[text_column]) for _, row in batch_df.iterrows()]
+            
+            # Tokenize entire batch
+            encoding = tokenizer(
+                batch_texts,
+                truncation=True,
+                padding=True,
+                max_length=128,
+                return_tensors='pt'
+            )
+            
+            input_ids = encoding['input_ids'].to(device)
+            attention_mask = encoding['attention_mask'].to(device)
+            
+            # Batch prediction
+            with torch.no_grad():
+                outputs = model(input_ids, attention_mask)
+                probabilities = torch.sigmoid(outputs).cpu().numpy()
+            
+            # Process batch results
+            for i, (idx, row) in enumerate(batch_df.iterrows()):
+                text = batch_texts[i]
+                probs = probabilities[i]
+                
+                result = {'text': text, 'row_index': idx}
+                
+                # Add probabilities and predictions
+                for j, label in enumerate(label_list):
+                    prob = float(probs[j])
+                    result[label] = prob
+                    result[f"{label}_predicted"] = prob > threshold
+                
+                results.append(result)
+            
+            # Update progress
+            progress = (batch_end / total_rows)
+            progress_bar.progress(progress)
+            status_text.text(f"Processed {batch_end}/{total_rows} rows ({progress:.1%})")
+            
+            # Clear GPU cache periodically
+            if batch_start % (batch_size * 10) == 0:
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+    
+    except Exception as e:
+        st.error(f"Error during batch processing: {str(e)}")
+        return pd.DataFrame(results) if results else pd.DataFrame()
+    
+    status_text.text("Processing complete!")
     return pd.DataFrame(results)
+
+# Memory-efficient chunked processing
+def process_large_csv(df, text_column, model, tokenizer, label_list, device, threshold=0.5, chunk_size=5000):
+    """Process very large CSV files in chunks"""
+    total_rows = len(df)
+    all_results = []
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for chunk_start in range(0, total_rows, chunk_size):
+        chunk_end = min(chunk_start + chunk_size, total_rows)
+        chunk_df = df.iloc[chunk_start:chunk_end]
+        
+        status_text.text(f"Processing chunk {chunk_start//chunk_size + 1}/{(total_rows-1)//chunk_size + 1}")
+        
+        # Process chunk with batching
+        chunk_results = predict_bulk_optimized(
+            chunk_df, text_column, model, tokenizer, label_list, device, threshold, batch_size=16
+        )
+        
+        if not chunk_results.empty:
+            all_results.append(chunk_results)
+        
+        # Update overall progress
+        progress = chunk_end / total_rows
+        progress_bar.progress(progress)
+        
+        # Clear memory
+        del chunk_df, chunk_results
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+    
+    status_text.text("Combining results...")
+    
+    if all_results:
+        final_df = pd.concat(all_results, ignore_index=True)
+        status_text.text("Processing complete!")
+        return final_df
+    else:
+        return pd.DataFrame()
 
 # Visualization functions
 def create_probability_chart(results, label_list):
@@ -357,8 +442,12 @@ def main():
         
         if uploaded_file is not None:
             try:
+                # Show file info
+                file_size = uploaded_file.size / (1024 * 1024)  # MB
+                st.info(f"📁 File size: {file_size:.2f} MB")
+                
                 df = pd.read_csv(uploaded_file)
-                st.success(f"Successfully loaded {len(df)} rows")
+                st.success(f"Successfully loaded {len(df):,} rows")
                 
                 # Show preview
                 st.subheader("Data Preview")
@@ -370,12 +459,76 @@ def main():
                     df.columns.tolist()
                 )
                 
+                # Processing options
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if len(df) > 10000:
+                        st.warning(f"⚠️ Large dataset detected ({len(df):,} rows)")
+                        chunk_size = st.selectbox(
+                            "Chunk size for processing:",
+                            [1000, 2000, 5000, 10000],
+                            index=2,
+                            help="Smaller chunks use less memory but take longer"
+                        )
+                    else:
+                        chunk_size = len(df)
+                
+                with col2:
+                    batch_size = st.selectbox(
+                        "Batch size:",
+                        [8, 16, 32, 64],
+                        index=1,
+                        help="Larger batches are faster but use more memory"
+                    )
+                
+                with col3:
+                    # Sample processing option for very large files
+                    if len(df) > 50000:
+                        st.warning("🚀 Large file detected!")
+                        sample_size = st.number_input(
+                            "Sample size (0 for all):",
+                            min_value=0,
+                            max_value=len(df),
+                            value=10000,
+                            help="Process only a sample for faster results"
+                        )
+                        if sample_size > 0:
+                            df = df.sample(n=sample_size, random_state=42)
+                            st.info(f"Using random sample of {sample_size:,} rows")
+                    else:
+                        sample_size = 0
+                
+                # Time estimation
+                estimated_time = max(1, len(df) / 1000)  # Rough estimate
+                st.info(f"⏱️ Estimated processing time: {estimated_time:.1f} minutes")
+                
                 if st.button("🚀 Analyze All Texts", type="primary"):
+                    start_time = datetime.now()
+                    
                     with st.spinner("Processing bulk predictions..."):
-                        results_df = predict_bulk(df, text_column, model, tokenizer, label_list, device, threshold)
+                        if len(df) > 10000:
+                            # Use chunked processing for large files
+                            results_df = process_large_csv(
+                                df, text_column, model, tokenizer, label_list, 
+                                device, threshold, chunk_size=chunk_size
+                            )
+                        else:
+                            # Use regular batch processing
+                            results_df = predict_bulk_optimized(
+                                df, text_column, model, tokenizer, label_list, 
+                                device, threshold, batch_size=batch_size
+                            )
+                    
+                    end_time = datetime.now()
+                    processing_time = (end_time - start_time).total_seconds()
                     
                     if not results_df.empty:
-                        st.success("Analysis complete!")
+                        st.success(f"✅ Analysis complete! Processed {len(results_df):,} texts in {processing_time:.1f} seconds")
+                        
+                        # Performance metrics
+                        texts_per_second = len(results_df) / processing_time
+                        st.metric("Processing Speed", f"{texts_per_second:.1f} texts/second")
                         
                         # Summary statistics
                         st.subheader("📊 Analysis Summary")
@@ -384,44 +537,92 @@ def main():
                         
                         with col1:
                             total_texts = len(results_df)
-                            st.metric("Total Texts", total_texts)
+                            st.metric("Total Texts", f"{total_texts:,}")
                         
                         with col2:
                             toxic_texts = sum(results_df[[f"{label}_predicted" for label in label_list]].any(axis=1))
-                            st.metric("Potentially Toxic", toxic_texts)
+                            st.metric("Potentially Toxic", f"{toxic_texts:,}")
                         
                         with col3:
                             safe_texts = total_texts - toxic_texts
-                            st.metric("Safe Texts", safe_texts)
+                            st.metric("Safe Texts", f"{safe_texts:,}")
                         
                         with col4:
                             toxicity_rate = (toxic_texts / total_texts) * 100
                             st.metric("Toxicity Rate", f"{toxicity_rate:.1f}%")
                         
+                        # Category breakdown
+                        st.subheader("📈 Category Breakdown")
+                        category_counts = {}
+                        for label in label_list:
+                            category_counts[label] = results_df[f"{label}_predicted"].sum()
+                        
+                        # Create metrics grid
+                        metric_cols = st.columns(len(label_list))
+                        for i, (label, count) in enumerate(category_counts.items()):
+                            with metric_cols[i]:
+                                percentage = (count / total_texts) * 100
+                                st.metric(
+                                    label.replace('_', ' ').title(),
+                                    f"{count:,}",
+                                    f"{percentage:.1f}%"
+                                )
+                        
                         # Visualizations
-                        st.subheader("📈 Analysis Charts")
+                        st.subheader("📊 Analysis Charts")
                         charts = create_bulk_analysis_charts(results_df, label_list)
                         
                         for chart in charts:
                             st.plotly_chart(chart, use_container_width=True)
                         
-                        # Detailed results
+                        # Most toxic texts
+                        st.subheader("⚠️ Most Toxic Content")
+                        
+                        # Calculate overall toxicity score
+                        results_df['overall_toxicity'] = results_df[label_list].max(axis=1)
+                        most_toxic = results_df.nlargest(10, 'overall_toxicity')[
+                            ['text', 'overall_toxicity'] + label_list
+                        ]
+                        
+                        st.dataframe(most_toxic, use_container_width=True)
+                        
+                        # Detailed results with pagination
                         st.subheader("📋 Detailed Results")
                         
                         # Filter options
                         filter_option = st.selectbox(
                             "Filter results:",
-                            ["All", "Toxic Only", "Safe Only"]
+                            ["All", "Toxic Only", "Safe Only", "High Confidence (>0.8)", "Low Confidence (<0.3)"]
                         )
                         
                         if filter_option == "Toxic Only":
                             filtered_df = results_df[results_df[[f"{label}_predicted" for label in label_list]].any(axis=1)]
                         elif filter_option == "Safe Only":
                             filtered_df = results_df[~results_df[[f"{label}_predicted" for label in label_list]].any(axis=1)]
+                        elif filter_option == "High Confidence (>0.8)":
+                            filtered_df = results_df[results_df[label_list].max(axis=1) > 0.8]
+                        elif filter_option == "Low Confidence (<0.3)":
+                            filtered_df = results_df[results_df[label_list].max(axis=1) < 0.3]
                         else:
                             filtered_df = results_df
                         
-                        st.dataframe(filtered_df)
+                        st.write(f"Showing {len(filtered_df):,} of {len(results_df):,} results")
+                        
+                        # Pagination for large results
+                        if len(filtered_df) > 1000:
+                            page_size = st.selectbox("Results per page:", [100, 500, 1000], index=1)
+                            total_pages = (len(filtered_df) - 1) // page_size + 1
+                            page = st.number_input("Page", 1, total_pages, 1)
+                            
+                            start_idx = (page - 1) * page_size
+                            end_idx = min(start_idx + page_size, len(filtered_df))
+                            display_df = filtered_df.iloc[start_idx:end_idx]
+                            
+                            st.write(f"Page {page} of {total_pages} (showing rows {start_idx+1}-{end_idx})")
+                        else:
+                            display_df = filtered_df
+                        
+                        st.dataframe(display_df, use_container_width=True)
                         
                         # Download results
                         csv = filtered_df.to_csv(index=False)
@@ -431,9 +632,12 @@ def main():
                             file_name=f"toxicity_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                             mime="text/csv"
                         )
+                    else:
+                        st.error("❌ No results generated. Please check your data and try again.")
                         
             except Exception as e:
                 st.error(f"Error processing file: {str(e)}")
+                st.error("Please ensure your CSV file is properly formatted and not corrupted.")
     
     with tab3:
         st.header("Model Performance & Insights")
