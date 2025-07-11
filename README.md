@@ -225,7 +225,7 @@ SOFTWARE.
 
 ### 📧 Contact Information
 - **Email**: [balajikamaraj99@gmail.com]
-- **LinkedIn**: [https://linkedin.com/in/yourprofile]([https://linkedin.com/in/yourprofile](https://www.linkedin.com/in/balaji-k-626613157/))
+- **LinkedIn**: [https://linkedin.com/in/yourprofile](https://www.linkedin.com/in/balaji-k-626613157/)
 - **GitHub**: [https://github.com/yourusername](https://github.com/yourusername)
 - **Portfolio**: [https://yourportfolio.com](https://yourportfolio.com)
 
