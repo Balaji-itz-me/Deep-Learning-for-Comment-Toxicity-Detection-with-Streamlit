@@ -225,18 +225,18 @@ SOFTWARE.
 
 ### 📧 Contact Information
 - **Email**: balajikamaraj99@gmail.com
-- **LinkedIn**: [https://linkedin.com/in/yourprofile](https://www.linkedin.com/in/balaji-k-626613157/)
-- **GitHub**: [https://github.com/yourusername](https://github.com/yourusername)
+- **LinkedIn**: https://www.linkedin.com/in/balaji-k-626613157/
+- **GitHub**: https://github.com/Balaji-itz-me
 - **Portfolio**: [https://yourportfolio.com](https://yourportfolio.com)
 
 ## 🔗 Links
 
 ### 🌐 Application Links
-- **Live App**: [https://your-toxicity-app.streamlit.app/](https://deep-learning-for-comment-toxicity-detection-with-app-yppaxtqb.streamlit.app/)
-- **GitHub Repository**: [https://github.com/yourusername/toxicity-detection-app](https://github.com/Balaji-itz-me/Deep-Learning-for-Comment-Toxicity-Detection-with-Streamlit)
+- **Live App**: https://deep-learning-for-comment-toxicity-detection-with-app-yppaxtqb.streamlit.app/
+- **GitHub Repository**: https://github.com/Balaji-itz-me/Deep-Learning-for-Comment-Toxicity-Detection-with-Streamlit
 
 ### 📱 Social Media
-- **LinkedIn Post**: [https://linkedin.com/posts/yourprofile_toxicity-detection-app](https://www.linkedin.com/posts/balaji-k-626613157_bert-nlp-toxiccommentclassifier-activity-7348349342296023041-s5RX?utm_source=share&utm_medium=member_desktop&rcm=ACoAACWk4L4BHp-HRG-mgVDRSaKjIjIYeY2cNIk)
+- **LinkedIn Post**: https://www.linkedin.com/posts/balaji-k-626613157_bert-nlp-toxiccommentclassifier-activity-7348349342296023041-s5RX?utm_source=share&utm_medium=member_desktop&rcm=ACoAACWk4L4BHp-HRG-mgVDRSaKjIjIYeY2cNIk
 
 ### 📚 Documentation
 - **API Documentation**: [Coming Soon]
