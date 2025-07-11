@@ -218,7 +218,7 @@ SOFTWARE.
 
 ## 👤 Author
 
-**[BALAJI K]**
+**BALAJI K**
 - 🎓 Data Scientist & Machine Learning Engineer
 - 📍 Location: NEW DELHI
 - 💼 Specialization: NLP, Deep Learning, AI Applications
