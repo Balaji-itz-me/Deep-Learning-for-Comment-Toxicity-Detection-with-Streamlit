@@ -363,7 +363,7 @@ SOFTWARE.
 
 ### Application Resources
 [![Live Application](https://img.shields.io/badge/Live%20App-Streamlit-FF6B6B?style=flat&logo=streamlit)](https://deep-learning-for-comment-toxicity-detection-with-app-4qkxfpdn.streamlit.app/)
-[![Source Code](https://img.shields.io/badge/Source%20Code-GitHub-181717?style=flat&logo=github)](https://github.com/Balaji-itz-me/Deep-Learning-for-Comment-Toxicity-Detection-with-Streamlit)
+[![Source Code](https://img.shields.io/badge/Source%20Code-GitHub-181717?style=flat&logo=github)](Toxicity_detection.ipynb)
 
 ### Documentation
 - **API Documentation**: Coming Soon
