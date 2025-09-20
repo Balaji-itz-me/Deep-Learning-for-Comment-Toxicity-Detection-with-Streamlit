@@ -64,7 +64,7 @@ The Toxicity Detection App is an AI-powered solution designed to identify and cl
 ![App Demo](Demo_video.mp4)
 
 ### 🌐 Live Application
-**Try it now:** [Toxicity Detection App]([https://your-streamlit-app-url.streamlit.app/](https://deep-learning-for-comment-toxicity-detection-with-app-yppaxtqb.streamlit.app/))
+**Try it now:** [Toxicity Detection App]([https://your-streamlit-app-url.streamlit.app/](https://deep-learning-for-comment-toxicity-detection-with-app-4qkxfpdn.streamlit.app/))
 
 ## 🛠️ Installation
 
@@ -232,7 +232,7 @@ SOFTWARE.
 ## 🔗 Links
 
 ### 🌐 Application Links
-- **Live App**: https://deep-learning-for-comment-toxicity-detection-with-app-yppaxtqb.streamlit.app/
+- **Live App**: https://deep-learning-for-comment-toxicity-detection-with-app-4qkxfpdn.streamlit.app/
 - **GitHub Repository**: https://github.com/Balaji-itz-me/Deep-Learning-for-Comment-Toxicity-Detection-with-Streamlit
 
 ### 📱 Social Media
