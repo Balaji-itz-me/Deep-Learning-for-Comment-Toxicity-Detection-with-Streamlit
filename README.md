@@ -6,7 +6,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C?style=for-the-badge&logo=pytorch)](https://pytorch.org)
 [![BERT](https://img.shields.io/badge/BERT-Transformer-FFD43B?style=for-the-badge)](https://github.com/google-research/bert)
 
-A comprehensive web application for detecting toxic content in text using advanced BERT-based machine learning models. Built with Streamlit for an intuitive user interface and powered by PyTorch for robust performance.
+A comprehensive web application for detecting toxic content in text using advanced BERT-based deep learning models. Built with Streamlit for an intuitive user interface and powered by PyTorch for robust performance.
 
 ## Table of Contents
 
